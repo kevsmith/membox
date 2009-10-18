@@ -37,13 +37,30 @@ start_link() ->
 
 command_loop(Tid) ->
 	receive
-		{Caller, {get, Key}} ->
-			Caller ! ets:lookup_element(Tid, Key, 3),
-			command_loop(Tid);
-		{Caller, {set, Key, Value}} ->
-			ets:insert(Tid, {Key, single, Value}),
-			Caller ! ok,
-			command_loop(Tid);
-		stop ->
-			ets:delete(Tid)
+		Msg ->
+			case handle(Tid, Msg) of
+				ok ->
+					command_loop(Tid);
+				stop ->
+					ets:delete(Tid)
+			end
 	end.
+
+handle(Tid, {Caller, {get, Key}}) ->
+	try
+		begin
+			[{_, Value}] = ets:lookup_element(Tid, Key, 2),
+			Caller! Value
+		end
+	catch
+		error:badarg ->
+			Caller ! ""
+	end,
+	ok;
+
+handle(Tid, {Caller, {set, Key, Value}}) ->
+	ets:insert(Tid, {Key, {string, Value}}),
+	Caller ! ok,
+	ok;
+handle(_Tid, stop) ->
+	stop.
