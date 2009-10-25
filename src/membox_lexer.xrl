@@ -21,7 +21,7 @@ type|TYPE				: {token, {type, TokenLine, "type"}}.
 keys|KEYS				: {token, {keys, TokenLine, "keys"}}.
 randomkey|RANDOMKEY			: {token, {randomkey, TokenLine, "randomkeys"}}.
 rename|RENAME				: {token, {rename, TokenLine, "rename"}}.
-renamenx|RENAMENX			: {token, {rename, TokenLine, "renamenx"}}.
+renamenx|RENAMENX			: {token, {renamenx, TokenLine, "renamenx"}}.
 dbsize|DBSIZE				: {token, {dbsize, TokenLine, "dbsize"}}.
 expire|EXPIRE				: {token, {expire, TokenLine, "expire"}}.
 ttl|TTL					: {token, {ttl, TokenLine, "ttl"}}.
