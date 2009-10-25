@@ -58,9 +58,18 @@ select|SELECT				: {token, {select, TokenLine, "select"}}.
 move|MOVE				: {token, {move, TokenLine, "move"}}.
 flushdb|FLUSHDB				: {token, {flushdb, TokenLine, "flushdb"}}.
 flushall|FLUSHALL			: {token, {flushall, TokenLine, "flushall"}}.
+quit|QUIT				: {token, {quit, TokenLine, "quit"}}.
+auth|AUTH				: {token, {auth, TokenLine, "auth"}}.
 
 %% Sort commands
 sort|SORT				: {token, {sort, TokenLine, "sort"}}.
+by|BY					: {token, {by, TokenLine, "by"}}.
+limit|LIMIT				: {token, {limit, TokenLine, "limit"}}.
+get|GET					: {token, {get, TokenLine, "get"}}.
+asc|ASC					: {token, {asc, TokenLine, "asc"}}.
+desc|DESC				: {token, {desc, TokenLine, "desc"}}.
+alpha|ALPHA				: {token, {alpha, TokenLine, "alpha"}}.
+
 
 %% Peristence commands
 save|SAVE				: {token, {save, TokenLine, "save"}}.

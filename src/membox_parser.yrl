@@ -3,12 +3,17 @@ data datum_list command set_expr get_expr getset_expr mget_expr setnx_expr
 incr_expr incrby_expr decr_expr decrby_expr exists_expr del_expr type_expr
 keys_expr randomkey_expr rename_expr renamenx_expr dbsize_expr expire_expr
 ttl_expr rpush_expr lpush_expr llen_expr lrange_expr ltrim_expr lindex_expr
-lset_expr lrem_expr lpop_expr rpop_expr.
+lset_expr lrem_expr lpop_expr rpop_expr sadd_expr srem_expr spop_expr smove_expr
+scard_expr sismember_expr sinter_expr sinterstore_expr sunion_expr sunionstore_expr
+sdiff_expr sdiffstore_expr smembers_expr select_expr move_expr flushdb_expr
+flushall_expr auth_expr quit_expr save_expr bgsave_expr lastsave_expr shutdown_expr.
 
 Terminals
 datum set get getset mget setnx incr incrby decr decrby exists del type
 keys randomkey rename renamenx dbsize expire ttl rpush lpush llen lrange
-ltrim lindex lset lrem lpop rpop.
+ltrim lindex lset lrem lpop rpop sadd srem spop smove scard sismember
+sinter sinterstore sunion sunionstore sdiff sdiffstore smembers select
+move flushdb flushall auth quit save bgsave lastsave shutdown.
 
 Rootsymbol command.
 
@@ -52,6 +57,31 @@ command -> lrem_expr: '$1'.
 command -> lpop_expr: '$1'.
 command -> rpop_expr: '$1'.
 
+command -> sadd_expr: '$1'.
+command -> srem_expr: '$1'.
+command -> spop_expr: '$1'.
+command -> smove_expr: '$1'.
+command -> scard_expr: '$1'.
+command -> sismember_expr: '$1'.
+command -> sinter_expr: '$1'.
+command -> sinterstore_expr: '$1'.
+command -> sunion_expr: '$1'.
+command -> sunionstore_expr: '$1'.
+command -> sdiff_expr: '$1'.
+command -> sdiffstore_expr: '$1'.
+command -> smembers_expr: '$1'.
+
+command -> select_expr: '$1'.
+command -> move_expr: '$1'.
+command -> flushdb_expr: '$1'.
+command -> flushall_expr: '$1'.
+command -> quit_expr: '$1'.
+command -> auth_expr: '$1'.
+command -> save_expr: '$1'.
+command -> lastsave_expr: '$1'.
+command -> bgsave_expr: '$1'.
+command -> shutdown_expr: '$1'.
+
 %% String commands
 set_expr -> set datum datum: {{set, ev('$2'), ev_ds('$3')}, status_ok}.
 get_expr -> get datum: {{get, ev('$2')}, bulk}.
@@ -86,6 +116,34 @@ lset_expr -> lset datum datum datum: {{lset, ev('$2'), ev_int('$3'), ev_ds('$4')
 lrem_expr -> lrem datum datum datum: {{lrem, ev('$2'), ev_int('$3'), ev_ds('$4')}, integer}.
 lpop_expr -> lpop datum: {{lpop, ev('$2')}, bulk}.
 rpop_expr -> rpop datum: {{rpop, ev('$2')}, bulk}.
+
+%% Set commands
+sadd_expr -> sadd datum datum: {{sadd, ev('$2'), ev_ds('$3')}, integer}.
+srem_expr -> srem datum datum: {{srem, ev('$2'), ev_ds('$3')}, integer}.
+spop_expr -> spop datum: {{spop, ev('$2')}, bulk}.
+smove_expr -> smove datum datum datum: {{smove, ev('$2'), ev('$3'), ev_ds('$4')}, integer}.
+scard_expr -> scard datum: {{scard, ev('$2')}, integer}.
+sismember_expr -> sismember datum datum: {{sismember, ev('$2'), ev_ds('$3')}, integer}.
+sinter_expr -> sinter data: {{sinter, '$2'}, multi_bulk}.
+sinterstore_expr -> sinterstore datum data: {{sinterstore, ev('$2'), '$3'}, status_ok}.
+sunion_expr -> sunion data: {{sunion, '$2'}, multi_bulk}.
+sunionstore_expr -> sunionstore datum data: {{sunionstore, ev('$2'), '$3'}, status_ok}.
+sdiff_expr -> sdiff data: {{sdiff, '$2'}, multi_bulk}.
+sdiffstore_expr -> sdiffstore datum data: {{sdiffstore, ev('$2'), '$3'}, status_ok}.
+smembers_expr -> smembers datum: {{smembers, ev('$2')}, multi_bulk}.
+
+%% DB commands
+select_expr -> select datum: {{select, ev_int('$2')}, status_ok}.
+move_expr -> move datum datum: {{move, ev('$2'), ev_int('$3')}, integer}.
+flushdb_expr -> flushdb: {flush, status_ok}.
+flushall_expr -> flushall: {flushall, status_ok}.
+quit_expr -> quit: {quit, close}.
+auth_expr -> auth datum: {{auth, ev('$2')}, status_ok}.
+save_expr -> save: {save, status_ok}.
+lastsave_expr -> lastsave: {lastsave, integer}.
+bgsave_expr -> bgsave: {bgsave, status_ok}.
+shutdown_expr -> shutdown: {shutdown, close}.
+
 
 Erlang code.
 -export([parse_string/1]).
