@@ -2,7 +2,6 @@ all: compile
 
 compile: ebin special
 	@cd src;erl -make
-	@rm -f src/membox_parser.erl src/membox_lexer.erl
 
 ebin:
 	@mkdir ebin
@@ -13,12 +12,20 @@ clean:
 tests: compile
 	@rm -rf test_db
 	@cd tests;erl -make
+	@echo "Running test suite"
 	@erl -noshell -pa ebin -b start_sasl -eval 'membox_suite:test().' -s init stop
 
-special: src/membox_lexer.erl src/membox_parser.erl
+special: lexer parser
 
-src/membox_lexer.erl:
-	cd src;erl -noshell -s init stop -eval 'leex:file("membox_lexer.xrl")'
+lexer: src/membox_lexer.erl
 
-src/membox_parser.erl:
-	erl -noshell -s init stop -eval 'yecc:file("src/membox_parser.yrl")'
+parser: src/membox_parser.erl
+
+src/membox_lexer.erl: src/membox_lexer.xrl
+	@echo "Generating lexer"
+	@cd src;erl -noshell -s init stop -eval 'leex:file("membox_lexer.xrl")'
+
+
+src/membox_parser.erl: src/membox_parser.yrl
+	@echo "Generating parser"
+	@erl -noshell -s init stop -eval 'yecc:file("src/membox_parser.yrl")'
