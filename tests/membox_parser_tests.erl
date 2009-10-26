@@ -124,6 +124,16 @@ db_test() ->
    ?assertMatch({lastsave, integer}, ?parse("LASTSAVE")),
    ?assertMatch({shutdown, close}, ?parse("SHUTDOWN"))].
 
+server_test() ->
+  [?assertMatch({info, info_bulk}, ?parse("info")),
+   ?assertMatch({monitor, pipe}, ?parse("monitor")),
+   ?assertMatch({{slaveof, "test.foo.com", 6379}, status_ok}, ?parse("slaveof test.foo.com 6379")),
+   ?assertMatch({{slaveof, "test.foo.com", 6379}, status_ok}, ?parse("slaveof test.foo.com")),
+   ?assertMatch({info, info_bulk}, ?parse("INFO")),
+   ?assertMatch({monitor, pipe}, ?parse("MONITOR")),
+   ?assertMatch({{slaveof, "test.foo.com", 6379}, status_ok}, ?parse("SLAVEOF test.foo.com 6379")),
+   ?assertMatch({{slaveof, "test.foo.com", 6379}, status_ok}, ?parse("SLAVEOF test.foo.com 6379"))].
+
 simple_parse(Txt) ->
   case membox_parser:parse_string(Txt) of
     {ok, Result} ->

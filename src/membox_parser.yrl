@@ -6,14 +6,16 @@ ttl_expr rpush_expr lpush_expr llen_expr lrange_expr ltrim_expr lindex_expr
 lset_expr lrem_expr lpop_expr rpop_expr sadd_expr srem_expr spop_expr smove_expr
 scard_expr sismember_expr sinter_expr sinterstore_expr sunion_expr sunionstore_expr
 sdiff_expr sdiffstore_expr smembers_expr select_expr move_expr flushdb_expr
-flushall_expr auth_expr quit_expr save_expr bgsave_expr lastsave_expr shutdown_expr.
+flushall_expr auth_expr quit_expr save_expr bgsave_expr lastsave_expr shutdown_expr
+info_expr monitor_expr slaveof_expr.
 
 Terminals
 datum set get getset mget setnx incr incrby decr decrby exists del type
 keys randomkey rename renamenx dbsize expire ttl rpush lpush llen lrange
 ltrim lindex lset lrem lpop rpop sadd srem spop smove scard sismember
 sinter sinterstore sunion sunionstore sdiff sdiffstore smembers select
-move flushdb flushall auth quit save bgsave lastsave shutdown.
+move flushdb flushall auth quit save bgsave lastsave shutdown info monitor
+slaveof.
 
 Rootsymbol command.
 
@@ -82,6 +84,10 @@ command -> lastsave_expr: '$1'.
 command -> bgsave_expr: '$1'.
 command -> shutdown_expr: '$1'.
 
+command -> info_expr: '$1'.
+command -> monitor_expr: '$1'.
+command -> slaveof_expr: '$1'.
+
 %% String commands
 set_expr -> set datum datum: {{set, ev('$2'), ev_ds('$3')}, status_ok}.
 get_expr -> get datum: {{get, ev('$2')}, bulk}.
@@ -144,8 +150,14 @@ lastsave_expr -> lastsave: {lastsave, integer}.
 bgsave_expr -> bgsave: {bgsave, status_ok}.
 shutdown_expr -> shutdown: {shutdown, close}.
 
+%% Server commands
+info_expr -> info: {info, info_bulk}.
+monitor_expr -> monitor: {monitor, pipe}.
+slaveof_expr -> slaveof datum datum: {{slaveof, ev('$2'), ev_int('$3')}, status_ok}.
+slaveof_expr -> slaveof datum: {{slaveof, ev('$2'), ?DEFAULT_PORT}, status_ok}.
 
 Erlang code.
+-include("membox_internal.hrl").
 -export([parse_string/1]).
 
 parse_string(Text) when is_binary(Text) ->
@@ -154,6 +166,12 @@ parse_string(Text) when is_list(Text) ->
   {ok, Tokens, _} = membox_lexer:string(Text),
   membox_parser:parse(Tokens).
 
+ev({alpha, _, _}) ->
+  alpha;
+ev({desc, _, _}) ->
+  desc;
+ev({asc, _, _}) ->
+  asc;
 ev({datum, _TokenLine, T}) ->
   T.
 
