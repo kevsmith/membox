@@ -3,4 +3,5 @@
 -include_lib("eunit/include/eunit.hrl").
 
 suite_test_() ->
-  [{module, membox_parser_tests}].
+  [{module, membox_parser_tests},
+   {module, membox_db_tests}].

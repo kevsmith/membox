@@ -11,22 +11,26 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
--record(state, {tid}).
+-record(state, {data_tid,
+                keys_tid}).
 
 start_link(Name) ->
   gen_server:start_link({local, Name}, ?MODULE, [Name], [{fullsweep_after, 1000}]).
 
 init([TableName]) ->
-  Tid = ets:new(TableName, [set]),
-  {ok, #state{tid=Tid}}.
+  DataTid = ets:new(TableName, [set]),
+  KeysTid = ets:new(list_to_atom(atom_to_list(TableName) ++ "_keys"), [set]),
+  ets:insert(KeysTid, {<<"keys">>, 0}),
+  {ok, #state{data_tid=DataTid,
+              keys_tid=KeysTid}}.
 
-handle_call({set, Key, Value}, _From, #state{tid=Tid}=State) ->
-  ets:insert(Tid, {Key, #membox_entry{type=string,
-                                      value=Value}}),
+handle_call({set, Key, Value}, _From, State) ->
+  insert(State, Key, #membox_entry{type=string,
+                                   value=Value}),
   {reply, ok, State};
 
-handle_call({get, Key}, _From, #state{tid=Tid}=State) ->
-  Reply = case lookup(Tid, Key, string) of
+handle_call({get, Key}, _From, State) ->
+  Reply = case lookup(State, Key, string) of
             Entry when is_record(Entry, membox_entry) ->
               Entry#membox_entry.value;
             V ->
@@ -34,24 +38,24 @@ handle_call({get, Key}, _From, #state{tid=Tid}=State) ->
           end,
   {reply, Reply, State};
 
-handle_call({getset, Key, Value}, _From, #state{tid=Tid}=State) ->
-  Reply = case lookup(Tid, Key, string) of
+handle_call({getset, Key, Value}, _From, State) ->
+  Reply = case lookup(State, Key, string) of
             error ->
               error;
             not_found ->
-              ets:insert(Tid, {Key, #membox_entry{type=string,
-                                                  value=Value}}),
+              insert(State, Key, #membox_entry{type=string,
+                                               value=Value}),
               not_found;
             Entry ->
-              ets:insert(Tid, {Key, #membox_entry{type=string,
-                                                  value=Value}}),
+              insert(State, Key, #membox_entry{type=string,
+                                               value=Value}),
               Entry#membox_entry.value
           end,
   {reply, Reply, State};
 
-handle_call({mget, Keys}, _From, #state{tid=Tid}=State) ->
+handle_call({mget, Keys}, _From, State) ->
   Values = lists:map(fun(Key) ->
-                         case lookup(Tid, Key, string) of
+                         case lookup(State, Key, string) of
                            E when E =:= not_found orelse E =:= error ->
                              E;
                            E ->
@@ -59,83 +63,123 @@ handle_call({mget, Keys}, _From, #state{tid=Tid}=State) ->
                          end end, Keys),
   {reply, Values, State};
 
-handle_call({setnx, Key, Value}, _From, #state{tid=Tid}=State) ->
-  Reply = case lookup(Tid, Key, string) of
+handle_call({setnx, Key, Value}, _From, State) ->
+  Reply = case lookup(State, Key, string) of
             not_found ->
-              ets:insert(Tid, {Key, #membox_entry{type=string,
-                                                  value=Value}}),
+              insert(State, Key, #membox_entry{type=string,
+                                               value=Value}),
               true;
             _ ->
               false
           end,
   {reply, Reply, State};
 
-handle_call({incr, Key}, _From, #state{tid=Tid}=State) ->
-  Reply = case lookup(Tid, Key, string) of
+handle_call({incr, Key}, _From, State) ->
+  Reply = increment_key(State, Key, 1),
+  {reply, Reply, State};
+
+handle_call({incrby, Key, Amount}, _From, State) ->
+  Reply = increment_key(State, Key, Amount),
+  {reply, Reply, State};
+
+handle_call({decr, Key}, _From, State) ->
+  Reply = increment_key(State, Key, -1),
+  {reply, Reply, State};
+
+handle_call({decrby, Key, Amount}, _From, State) ->
+  Reply = increment_key(State, Key, Amount * -1),
+  {reply, Reply, State};
+
+handle_call({type, Key}, _From, State) ->
+  Reply = case lookup(State, Key, all) of
             not_found ->
-              ets:insert(Tid, {Key, #membox_entry{type=string,
-                                                  value= <<"0">>}}),
-              0;
-            error ->
-              error;
-          Entry ->
-              NewValue = binary_to_integer(Entry#membox_entry.value) + 1,
-              ets:insert(Tid, {Key, Entry#membox_entry{value=integer_to_binary(NewValue)}}),
-              NewValue
+              none;
+            Entry ->
+              Entry#membox_entry.type
           end,
   {reply, Reply, State};
 
-handle_call({incrby, Key, Amount}, _From, #state{tid=Tid}=State) ->
-  Reply = case lookup(Tid, Key, string) of
-            not_found ->
-              ets:insert(Tid, {Key, #membox_entry{type=string,
-                                                  value= <<"0">>}}),
-              0;
-            error ->
-              error;
-          Entry ->
-              NewValue = binary_to_integer(Entry#membox_entry.value) + Amount,
-              ets:insert(Tid, {Key, Entry#membox_entry{value=integer_to_binary(NewValue)}}),
-              NewValue
+handle_call({del, Key}, _From, State) ->
+  {reply, delete(State, Key), State};
+
+handle_call({exists, Key}, _From, #state{data_tid=DataTid}=State) ->
+  {reply, ets:member(DataTid, Key), State};
+
+handle_call({keys, Pattern}, _From, #state{data_tid=DataTid}=State) ->
+  Reply = case re:compile(Pattern, [extended, anchored]) of
+            {ok, CPattern} ->
+              ets:safe_fixtable(DataTid, true),
+              find_keys(ets:first(DataTid), DataTid, CPattern, []);
+            _ ->
+              error
           end,
   {reply, Reply, State};
 
-handle_call({decr, Key}, _From, #state{tid=Tid}=State) ->
-  Reply = case lookup(Tid, Key, string) of
+handle_call(randomkey, _From, #state{keys_tid=KTid}=State) ->
+  KeySize = ets:lookup_element(KTid, <<"keys">>, 2),
+  KeyId = crypto:rand_uniform(1, KeySize),
+  Key = ets:lookup_element(KTid, KeyId, 2),
+  {reply, Key, State};
+
+handle_call({rename, OldKey, NewKey}, _From, State) ->
+  Reply = case lookup(State, OldKey, all) of
             not_found ->
-              ets:insert(Tid, {Key, #membox_entry{type=string,
-                                                  value= <<"0">>}}),
-              0;
-            error ->
-              error;
-          Entry ->
-              NewValue = binary_to_integer(Entry#membox_entry.value) - 1,
-              ets:insert(Tid, {Key, Entry#membox_entry{value=integer_to_binary(NewValue)}}),
-              NewValue
+              not_found;
+            OldEntry ->
+              case lookup(State, NewKey, all) of
+                not_found ->
+                  delete(State, OldKey),
+                  insert(State, NewKey, OldEntry),
+                  ok;
+                NewEntry ->
+                  delete(State, OldKey),
+                  ets:insert(State#state.data_tid, {NewKey, OldEntry#membox_entry{keyid=NewEntry#membox_entry.keyid}}),
+                  ok
+              end
           end,
   {reply, Reply, State};
 
-handle_call({decrby, Key, Amount}, _From, #state{tid=Tid}=State) ->
-  Reply = case lookup(Tid, Key, string) of
-            not_found ->
-              ets:insert(Tid, {Key, #membox_entry{type=string,
-                                                  value= <<"0">>}}),
-              0;
-            error ->
-              error;
-          Entry ->
-              NewValue = binary_to_integer(Entry#membox_entry.value) - Amount,
-              ets:insert(Tid, {Key, Entry#membox_entry{value=integer_to_binary(NewValue)}}),
-              NewValue
-          end,
-  {reply, Reply, State};
-
-handle_call({exists, Key}, _From, #state{tid=Tid}=State) ->
-  Reply = case lookup(Tid, Key, any) of
+handle_call({renamenx, OldKey, NewKey}, _From, State) ->
+  Reply = case lookup(State, OldKey, all) of
             not_found ->
               false;
-            _ ->
-              true
+            OldEntry ->
+              case lookup(State, NewKey, all) of
+                not_found ->
+                  delete(State, OldKey),
+                  insert(State, NewKey, OldEntry),
+                  true;
+                _NewEntry ->
+                  false
+              end
+          end,
+  {reply, Reply, State};
+
+handle_call(dbsize, _From, #state{keys_tid=KTid}=State) ->
+  %% Have to deduct counter entry
+  {reply, ets:info(KTid, size) - 1, State};
+
+handle_call({expire, Key, Seconds}, _From, State) ->
+  Reply = case lookup(State, Key, all) of
+            not_found ->
+              false;
+            Entry ->
+              case Entry#membox_entry.expiry of
+                -1 ->
+                  insert(State, Key, Entry#membox_entry{expiry=now_to_secs() + Seconds}),
+                  true;
+                _ ->
+                  false
+              end
+          end,
+  {reply, Reply, State};
+
+handle_call({ttl, Key}, _From, State) ->
+  Reply = case lookup(State, Key, all) of
+            not_found ->
+              -1;
+            Entry ->
+              Entry#membox_entry.expiry
           end,
   {reply, Reply, State};
 
@@ -155,14 +199,41 @@ code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
 
 %% Internal functions
-lookup(Tid, Key, Type) ->
-  Now = calendar:datetime_to_gregorian_seconds(calendar:universal_time()),
+find_keys('$end_of_table', Tid, _, Accum) ->
+  ets:safe_fixtable(Tid, false),
+  Accum;
+find_keys(Key, Tid, Pattern, Accum) ->
+  NewAccum = case re:run(Key, Pattern) of
+               {match, _} ->
+                 [Key|Accum];
+               _ ->
+                 Accum
+             end,
+  find_keys(ets:next(Tid, Key), Tid, Pattern, NewAccum).
+
+increment_key(State, Key, Amount) ->
+ case lookup(State, Key, string) of
+   not_found ->
+     insert(State, Key, #membox_entry{type=string,
+                                      value= integer_to_binary(Amount)}),
+     Amount;
+   error ->
+     error;
+   Entry ->
+     NewValue = binary_to_integer(Entry#membox_entry.value) + Amount,
+     insert(State, Key, Entry#membox_entry{value=integer_to_binary(NewValue)}),
+     NewValue
+ end.
+
+lookup(#state{data_tid=DTid, keys_tid=KTid}, Key, Type) ->
+  Now = now_to_secs(),
   try
     begin
-      Entry = ets:lookup_element(Tid, Key, 2),
+      Entry = ets:lookup_element(DTid, Key, 2),
       case has_expired(Entry, Now) of
         true ->
-          ets:delete(Tid, Key),
+          ets:delete(DTid, Key),
+          ets:delete(KTid, Entry#membox_entry.keyid),
           not_found;
         false ->
           case is_correct_type(Entry, Type) of
@@ -204,3 +275,26 @@ binary_to_integer(B) ->
 
 integer_to_binary(N) ->
   list_to_binary(integer_to_list(N)).
+
+delete(#state{data_tid=DTid, keys_tid=KTid}=State, Key) ->
+  case lookup(State, Key, all) of
+    not_found ->
+      ok;
+    Entry ->
+      ets:delete(KTid, Entry#membox_entry.keyid),
+      ets:delete(DTid, Key),
+      ok
+  end.
+
+insert(#state{data_tid=DTid, keys_tid=KTid}=State, Key, Entry) ->
+  case lookup(State, Key, all) of
+    not_found ->
+      KeyId = ets:update_counter(KTid, <<"keys">>, {2, 1}),
+      ets:insert(KTid, {KeyId, Key}),
+      ets:insert(DTid, {Key, Entry#membox_entry{keyid=KeyId}});
+    OldEntry ->
+      ets:insert(DTid, {Key, Entry#membox_entry{keyid=OldEntry#membox_entry.keyid}})
+  end.
+
+now_to_secs() ->
+  calendar:datetime_to_gregorian_seconds(calendar:universal_time()).

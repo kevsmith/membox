@@ -13,7 +13,7 @@ tests: compile
 	@rm -rf test_db
 	@cd tests;erl -make
 	@echo "Running test suite"
-	@erl -noshell -pa ebin -b start_sasl -eval 'membox_suite:test().' -s init stop
+	@erl -noshell -pa ebin -b start_sasl -s crypto -eval 'membox_suite:test().' -s init stop
 
 special: lexer parser
 
