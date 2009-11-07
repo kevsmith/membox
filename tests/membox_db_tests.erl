@@ -44,14 +44,14 @@ del_test_() ->
    fun({ok, Pid}) -> teardown(Pid) end,
    [fun() ->
         ok = gen_server:call(db1, {set, <<"foo">>, <<"bar">>}),
-        ok = gen_server:call(db1, {del, <<"foo">>}),
+        true = gen_server:call(db1, {del, <<"foo">>}),
         ?assertMatch(not_found, gen_server:call(db1, {get, <<"foo">>})),
-        ?assertMatch([], gen_server:call(db1, {keys, <<"foo">>})) end]}.
+        ?assertMatch(not_found, gen_server:call(db1, {keys, <<"foo">>})) end]}.
 
 keys_test_() ->
   {setup, fun() -> membox_db:start_link(db1) end,
    fun({ok, Pid}) -> teardown(Pid) end,
-   [?_assertMatch([], gen_server:call(db1, {keys, <<"f?o">>})),
+   [?_assertMatch(not_found, gen_server:call(db1, {keys, <<"f?o">>})),
     fun() ->
         ok = gen_server:call(db1, {set, <<"foo">>, <<"bar">>}),
         ?assertMatch([<<"foo">>], gen_server:call(db1, {keys, <<"f?o">>})) end,
@@ -85,6 +85,14 @@ size_test_() ->
                           gen_server:call(db1, {set, V, V}) end,
                       lists:seq(1, 1000)),
         1000 = gen_server:call(db1, dbsize) end]}.
+
+ttl_test_() ->
+  {setup, fun() -> membox_db:start_link(db1) end,
+   fun({ok, Pid}) -> teardown(Pid) end,
+   [fun() ->
+        ok = gen_server:call(db1, {set, <<"ab">>, <<"def">>}),
+        true = gen_server:call(db1, {expire, <<"ab">>, 30}),
+        30 = gen_server:call(db1, {ttl, <<"ab">>}) end]}.
 
 teardown(Pid) ->
   unlink(Pid),

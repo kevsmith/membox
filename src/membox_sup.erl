@@ -24,7 +24,7 @@ init([]) ->
 	Shutdown = 2000,
 	Type = worker,
 
-	Storage = {storage, {membox_storage, start_link, []},
+	Storage = {storage, {membox_db, start_link, [db1]},
 						 Restart, Shutdown, Type, [membox_storage]},
 	Listener = {listener, {membox_listener, start_link, []},
 							Restart, Shutdown, Type, [membox_listener]},

@@ -100,18 +100,24 @@ handle_call({type, Key}, _From, State) ->
   {reply, Reply, State};
 
 handle_call({del, Key}, _From, State) ->
-  {reply, delete(State, Key), State};
+  {reply, ok =:= delete(State, Key), State};
 
 handle_call({exists, Key}, _From, #state{data_tid=DataTid}=State) ->
   {reply, ets:member(DataTid, Key), State};
 
 handle_call({keys, Pattern}, _From, #state{data_tid=DataTid}=State) ->
-  Reply = case re:compile(Pattern, [extended, anchored]) of
-            {ok, CPattern} ->
-              ets:safe_fixtable(DataTid, true),
-              find_keys(ets:first(DataTid), DataTid, CPattern, []);
-            _ ->
-              error
+  Results = case re:compile(Pattern, [extended, anchored]) of
+              {ok, CPattern} ->
+                ets:safe_fixtable(DataTid, true),
+                find_keys(ets:first(DataTid), DataTid, CPattern, []);
+              _ ->
+                error
+            end,
+  Reply = case Results of
+            [] ->
+              not_found;
+            Matches ->
+              Matches
           end,
   {reply, Reply, State};
 
@@ -179,7 +185,21 @@ handle_call({ttl, Key}, _From, State) ->
             not_found ->
               -1;
             Entry ->
-              Entry#membox_entry.expiry
+              Entry#membox_entry.expiry - now_to_secs()
+          end,
+  {reply, Reply, State};
+
+handle_call({rpush, Key, Value}, _From, State) ->
+  Reply = case lookup(State, Key, list) of
+            not_found ->
+              insert(State, Key, #membox_entry{type=list,
+                                               value=[Value]}),
+              ok;
+            error ->
+              error;
+            Entry ->
+              insert(State, Key, Entry#membox_entry{value=[Entry|Entry#membox_entry.value]}),
+              ok
           end,
   {reply, Reply, State};
 
@@ -298,3 +318,6 @@ insert(#state{data_tid=DTid, keys_tid=KTid}=State, Key, Entry) ->
 
 now_to_secs() ->
   calendar:datetime_to_gregorian_seconds(calendar:universal_time()).
+
+with_entry(Key, State, Entry, Fun) ->
+  insert(State, Key, Fun(Entry)).

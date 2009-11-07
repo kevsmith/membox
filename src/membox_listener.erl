@@ -35,5 +35,5 @@ sock_opts() ->
 	 {reuseaddr, true}].
 
 new_connection(Sock, State) ->
-	membox_worker:start_link(Sock),
+	membox_worker:start(Sock),
 	{ok, State}.

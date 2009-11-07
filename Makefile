@@ -8,6 +8,7 @@ ebin:
 
 clean:
 	@rm -rf ebin
+	@rm -f src/membox_lexer.erl src/membox_parser.erl
 
 tests: compile
 	@rm -rf test_db

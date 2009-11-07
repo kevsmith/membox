@@ -89,62 +89,62 @@ command -> monitor_expr: '$1'.
 command -> slaveof_expr: '$1'.
 
 %% String commands
-set_expr -> set datum datum: {{set, ev('$2'), ev_ds('$3')}, status_ok}.
-get_expr -> get datum: {{get, ev('$2')}, bulk}.
-getset_expr -> getset datum datum: {{getset, ev('$2'), ev_ds('$3')}, bulk}.
-mget_expr -> mget data: {{mget, '$2'}, multi_bulk}.
-setnx_expr -> setnx datum datum: {{setnx, ev('$2'), ev_ds('$3')}, integer}.
-incr_expr -> incr datum: {{incr, ev('$2')}, integer}.
-incrby_expr -> incrby datum datum: {{incrby, ev('$2'), ev_int('$3')}, integer}.
-decr_expr -> decr datum: {{decr, ev('$2')}, integer}.
-decrby_expr -> decrby datum datum: {{decrby, ev('$2'), ev_int('$3')}, integer}.
-exists_expr -> exists datum: {{exists, ev('$2')}, integer}.
-del_expr -> del datum: {{del, ev('$2')}, integer}.
-type_expr -> type datum: {{type, ev('$2')}, status_type}.
+set_expr -> set datum datum: {[set, ev('$2'), ev_ds('$3')], status_ok}.
+get_expr -> get datum: {[get, ev('$2')], bulk}.
+getset_expr -> getset datum datum: {[getset, ev('$2'), ev_ds('$3')], bulk}.
+mget_expr -> mget data: {[mget, '$2'], multi_bulk}.
+setnx_expr -> setnx datum datum: {[setnx, ev('$2'), ev_ds('$3')], integer}.
+incr_expr -> incr datum: {[incr, ev('$2')], integer}.
+incrby_expr -> incrby datum datum: {[incrby, ev('$2'), ev_int('$3')], integer}.
+decr_expr -> decr datum: {[decr, ev('$2')], integer}.
+decrby_expr -> decrby datum datum: {[decrby, ev('$2'), ev_int('$3')], integer}.
+exists_expr -> exists datum: {[exists, ev('$2')], integer}.
+del_expr -> del datum: {[del, ev('$2')], integer}.
+type_expr -> type datum: {[type, ev('$2')], status_type}.
 
 %% Keyspace commands
-keys_expr -> keys datum: {{keys, ev('$2')}, bulk}.
+keys_expr -> keys datum: {[keys, ev('$2')], bulk_key_string}.
 randomkey_expr -> randomkey: {randomkey, single_line}.
-renamenx_expr -> renamenx datum datum: {{renamenx, ev('$2'), ev('$3')}, integer}.
-rename_expr -> rename datum datum: {{rename, ev('$2'), ev('$3')}, status_ok}.
+renamenx_expr -> renamenx datum datum: {[renamenx, ev('$2'), ev('$3')], integer}.
+rename_expr -> rename datum datum: {[rename, ev('$2'), ev('$3')], status_ok}.
 dbsize_expr -> dbsize: {dbsize, integer}.
-expire_expr -> expire datum: {{expire, ev('$2')}, integer}.
-ttl_expr -> ttl datum: {{ttl, ev('$2')}, integer}.
+expire_expr -> expire datum datum: {[expire, ev('$2'), ev_int('$3')], integer}.
+ttl_expr -> ttl datum: {[ttl, ev('$2')], integer}.
 
 %% List commands
-rpush_expr -> rpush datum datum: {{rpush, ev('$2'), ev_ds('$3')}, status_ok}.
-lpush_expr -> lpush datum datum: {{lpush, ev('$2'), ev_ds('$3')}, status_ok}.
-llen_expr -> llen datum: {{llen, ev('$2')}, integer}.
-lrange_expr -> lrange datum datum datum: {{lrange, ev('$2'), ev_int('$3'), ev_int('$4')}, multi_bulk}.
-ltrim_expr -> ltrim datum datum datum: {{ltrim, ev('$2'), ev_int('$3'), ev_int('$4')}, status_ok}.
-lindex_expr -> lindex datum datum: {{lindex, ev('$2'), ev_int('$3')}, bulk}.
-lset_expr -> lset datum datum datum: {{lset, ev('$2'), ev_int('$3'), ev_ds('$4')}, status_ok}.
-lrem_expr -> lrem datum datum datum: {{lrem, ev('$2'), ev_int('$3'), ev_ds('$4')}, integer}.
-lpop_expr -> lpop datum: {{lpop, ev('$2')}, bulk}.
-rpop_expr -> rpop datum: {{rpop, ev('$2')}, bulk}.
+rpush_expr -> rpush datum datum: {[rpush, ev('$2'), ev_ds('$3')], status_ok}.
+lpush_expr -> lpush datum datum: {[lpush, ev('$2'), ev_ds('$3')], status_ok}.
+llen_expr -> llen datum: {[llen, ev('$2')], integer}.
+lrange_expr -> lrange datum datum datum: {[lrange, ev('$2'), ev_int('$3'), ev_int('$4')], multi_bulk}.
+ltrim_expr -> ltrim datum datum datum: {[ltrim, ev('$2'), ev_int('$3'), ev_int('$4')], status_ok}.
+lindex_expr -> lindex datum datum: {[lindex, ev('$2'), ev_int('$3')], bulk}.
+lset_expr -> lset datum datum datum: {[lset, ev('$2'), ev_int('$3'), ev_ds('$4')], status_ok}.
+lrem_expr -> lrem datum datum datum: {[lrem, ev('$2'), ev_int('$3'), ev_ds('$4')], integer}.
+lpop_expr -> lpop datum: {[lpop, ev('$2')], bulk}.
+rpop_expr -> rpop datum: {[rpop, ev('$2')], bulk}.
 
 %% Set commands
-sadd_expr -> sadd datum datum: {{sadd, ev('$2'), ev_ds('$3')}, integer}.
-srem_expr -> srem datum datum: {{srem, ev('$2'), ev_ds('$3')}, integer}.
-spop_expr -> spop datum: {{spop, ev('$2')}, bulk}.
-smove_expr -> smove datum datum datum: {{smove, ev('$2'), ev('$3'), ev_ds('$4')}, integer}.
-scard_expr -> scard datum: {{scard, ev('$2')}, integer}.
-sismember_expr -> sismember datum datum: {{sismember, ev('$2'), ev_ds('$3')}, integer}.
-sinter_expr -> sinter data: {{sinter, '$2'}, multi_bulk}.
-sinterstore_expr -> sinterstore datum data: {{sinterstore, ev('$2'), '$3'}, status_ok}.
-sunion_expr -> sunion data: {{sunion, '$2'}, multi_bulk}.
-sunionstore_expr -> sunionstore datum data: {{sunionstore, ev('$2'), '$3'}, status_ok}.
-sdiff_expr -> sdiff data: {{sdiff, '$2'}, multi_bulk}.
-sdiffstore_expr -> sdiffstore datum data: {{sdiffstore, ev('$2'), '$3'}, status_ok}.
-smembers_expr -> smembers datum: {{smembers, ev('$2')}, multi_bulk}.
+sadd_expr -> sadd datum datum: {[sadd, ev('$2'), ev_ds('$3')], integer}.
+srem_expr -> srem datum datum: {[srem, ev('$2'), ev_ds('$3')], integer}.
+spop_expr -> spop datum: {[spop, ev('$2')], bulk}.
+smove_expr -> smove datum datum datum: {[smove, ev('$2'), ev('$3'), ev_ds('$4')], integer}.
+scard_expr -> scard datum: {[scard, ev('$2')], integer}.
+sismember_expr -> sismember datum datum: {[sismember, ev('$2'), ev_ds('$3')], integer}.
+sinter_expr -> sinter data: {[sinter, '$2'], multi_bulk}.
+sinterstore_expr -> sinterstore datum data: {[sinterstore, ev('$2'), '$3'], status_ok}.
+sunion_expr -> sunion data: {[sunion, '$2'], multi_bulk}.
+sunionstore_expr -> sunionstore datum data: {[sunionstore, ev('$2'), '$3'], status_ok}.
+sdiff_expr -> sdiff data: {[sdiff, '$2'], multi_bulk}.
+sdiffstore_expr -> sdiffstore datum data: {[sdiffstore, ev('$2'), '$3'], status_ok}.
+smembers_expr -> smembers datum: {[smembers, ev('$2')], multi_bulk}.
 
 %% DB commands
-select_expr -> select datum: {{select, ev_int('$2')}, status_ok}.
-move_expr -> move datum datum: {{move, ev('$2'), ev_int('$3')}, integer}.
+select_expr -> select datum: {[select, ev_int('$2')], status_ok}.
+move_expr -> move datum datum: {[move, ev('$2'), ev_int('$3')], integer}.
 flushdb_expr -> flushdb: {flush, status_ok}.
 flushall_expr -> flushall: {flushall, status_ok}.
 quit_expr -> quit: {quit, close}.
-auth_expr -> auth datum: {{auth, ev('$2')}, status_ok}.
+auth_expr -> auth datum: {[auth, ev('$2')], status_ok}.
 save_expr -> save: {save, status_ok}.
 lastsave_expr -> lastsave: {lastsave, integer}.
 bgsave_expr -> bgsave: {bgsave, status_ok}.
@@ -153,8 +153,8 @@ shutdown_expr -> shutdown: {shutdown, close}.
 %% Server commands
 info_expr -> info: {info, info_bulk}.
 monitor_expr -> monitor: {monitor, pipe}.
-slaveof_expr -> slaveof datum datum: {{slaveof, ev('$2'), ev_int('$3')}, status_ok}.
-slaveof_expr -> slaveof datum: {{slaveof, ev('$2'), ?DEFAULT_PORT}, status_ok}.
+slaveof_expr -> slaveof datum datum: {[slaveof, ev('$2'), ev_int('$3')], status_ok}.
+slaveof_expr -> slaveof datum: {[slaveof, ev('$2'), ?DEFAULT_PORT], status_ok}.
 
 Erlang code.
 -include("membox_internal.hrl").
@@ -163,8 +163,12 @@ Erlang code.
 parse_string(Text) when is_binary(Text) ->
   parse_string(binary_to_list(Text));
 parse_string(Text) when is_list(Text) ->
-  {ok, Tokens, _} = membox_lexer:string(Text),
-  membox_parser:parse(Tokens).
+  case membox_lexer:string(Text) of
+    {ok, Tokens, _} ->
+      membox_parser:parse(Tokens);
+    Error ->
+      Error
+  end.
 
 ev({alpha, _, _}) ->
   alpha;
