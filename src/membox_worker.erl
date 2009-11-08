@@ -63,7 +63,8 @@ handle_info({tcp, Socket, Data}, State) ->
 handle_info({inet_async, _Sock, _, {ok, Data}}, #state{command=Command, resp_spec=RespSpec}=State) ->
   Size = size(Data) - 2,
   <<Payload:Size/binary, _/binary>> = Data,
-  handle_command(list_to_tuple(Command ++ [Payload]), RespSpec, State#state{complete=true});
+  FinalCommand = list_to_tuple(Command ++ [Payload]),
+  handle_command(FinalCommand, RespSpec, State#state{complete=true});
 
 handle_info(_Info, State) ->
   io:format("Info: ~p~n", [_Info]),
@@ -74,6 +75,10 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
+
+%% Internal functions
+handle_command(quit, _, State) ->
+  {stop, shutdown, State};
 
 handle_command(Cmd, ResponseSpec, #state{db=Db, sock=Sock, complete=true}=State) ->
   Response = gen_server:call(Db, Cmd),
@@ -93,6 +98,17 @@ handle_command([Cmd|_]=Command, ResponseSpec, #state{sock=Sock, db=Db}=State) wh
   membox_response:send(Response, ResponseSpec, Sock),
   {noreply, reset_state(State)};
 
+handle_command([Cmd|_]=Command, ResponseSpec, #state{sock=Sock}=State) when Cmd =:= lset;
+                                                                            Cmd =:= lrem ->
+  case lists:nth(4, Command) of
+    Sz when is_number(Sz) ->
+      inet:setopts(Sock, [binary, {packet, raw}]),
+      prim_inet:async_recv(Sock, Sz, -1),
+      {noreply, State#state{command=chop(Command, 3), resp_spec=ResponseSpec}};
+    false ->
+      io:format("Oopsie: ~p~n", [Command])
+  end;
+
 handle_command(Command, ResponseSpec, #state{sock=Sock}=State) when length(Command) == 3 ->
   case lists:nth(3, Command) of
     Sz when is_number(Sz) ->
@@ -106,11 +122,22 @@ handle_command(Command, ResponseSpec, #state{sock=Sock}=State) when length(Comma
 handle_command({get, _Key}=Command, ResponseSpec, #state{db=Db, sock=Sock}=State) ->
   Response = gen_server:call(Db, Command),
   membox_response:send(Response, ResponseSpec, Sock),
+  {noreply, reset_state(State)};
+
+handle_command(Command, ResponseSpec, #state{db=Db, sock=Sock}=State) ->
+  Response = gen_server:call(Db, list_to_tuple(Command)),
+  membox_response:send(Response, ResponseSpec, Sock),
   {noreply, reset_state(State)}.
 
 chop(Command) ->
+  chop(Command, 2).
+
+chop(Command, 2) ->
   [Cmd, Key|_] = Command,
-  [Cmd, Key].
+  [Cmd, Key];
+chop(Command, 3) ->
+  [Cmd, Key, Index|_] = Command,
+  [Cmd, Key, Index].
 
 reset_state(#state{sock=Sock}=State) ->
   inet:setopts(Sock, [{packet, line}, {active, once}]),

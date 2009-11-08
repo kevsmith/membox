@@ -30,28 +30,17 @@ handle_call({set, Key, Value}, _From, State) ->
   {reply, ok, State};
 
 handle_call({get, Key}, _From, State) ->
-  Reply = case lookup(State, Key, string) of
-            Entry when is_record(Entry, membox_entry) ->
-              Entry#membox_entry.value;
-            V ->
-              V
-          end,
-  {reply, Reply, State};
+  Handlers = [{found, fun(Entry) -> Entry#membox_entry.value end}],
+  {reply, with_query(State, Key, string, Handlers), State};
 
 handle_call({getset, Key, Value}, _From, State) ->
-  Reply = case lookup(State, Key, string) of
-            error ->
-              error;
-            not_found ->
-              insert(State, Key, #membox_entry{type=string,
-                                               value=Value}),
-              not_found;
-            Entry ->
-              insert(State, Key, #membox_entry{type=string,
-                                               value=Value}),
-              Entry#membox_entry.value
-          end,
-  {reply, Reply, State};
+  Handlers = [{found, fun(Entry) -> insert(State, Key, #membox_entry{type=string,
+                                                                     value=Value}),
+                                    Entry#membox_entry.value end},
+              {not_found, fun(_) -> insert(State, Key, #membox_entry{type=string,
+                                                                     value=Value}),
+                                    not_found end}],
+  {reply, with_query(State, Key, string, Handlers), State};
 
 handle_call({mget, Keys}, _From, State) ->
   Values = lists:map(fun(Key) ->
@@ -64,15 +53,11 @@ handle_call({mget, Keys}, _From, State) ->
   {reply, Values, State};
 
 handle_call({setnx, Key, Value}, _From, State) ->
-  Reply = case lookup(State, Key, string) of
-            not_found ->
-              insert(State, Key, #membox_entry{type=string,
-                                               value=Value}),
-              true;
-            _ ->
-              false
-          end,
-  {reply, Reply, State};
+  Handlers = [{not_found, fun(_) -> insert(State, Key, #membox_entry{type=string,
+                                                                     value=Value}),
+                                    true end},
+              {found, fun(_) -> false end}],
+  {reply, with_query(State, Key, string, Handlers), State};
 
 handle_call({incr, Key}, _From, State) ->
   Reply = increment_key(State, Key, 1),
@@ -91,13 +76,9 @@ handle_call({decrby, Key, Amount}, _From, State) ->
   {reply, Reply, State};
 
 handle_call({type, Key}, _From, State) ->
-  Reply = case lookup(State, Key, all) of
-            not_found ->
-              none;
-            Entry ->
-              Entry#membox_entry.type
-          end,
-  {reply, Reply, State};
+  Handlers = [{not_found, fun(_) -> none end},
+              {found, fun(Entry) -> Entry#membox_entry.type end}],
+  {reply, with_query(State, Key, all, Handlers), State};
 
 handle_call({del, Key}, _From, State) ->
   {reply, ok =:= delete(State, Key), State};
@@ -166,42 +147,99 @@ handle_call(dbsize, _From, #state{keys_tid=KTid}=State) ->
   {reply, ets:info(KTid, size) - 1, State};
 
 handle_call({expire, Key, Seconds}, _From, State) ->
-  Reply = case lookup(State, Key, all) of
-            not_found ->
-              false;
-            Entry ->
-              case Entry#membox_entry.expiry of
-                -1 ->
-                  insert(State, Key, Entry#membox_entry{expiry=now_to_secs() + Seconds}),
-                  true;
-                _ ->
-                  false
-              end
-          end,
-  {reply, Reply, State};
+  Handlers = [{not_found, fun(_) -> false end},
+              {found, fun(Entry) -> case Entry#membox_entry.expiry of
+                                      -1 ->
+                                        insert(State, Key, Entry#membox_entry{expiry=now_to_secs() + Seconds}),
+                                        true;
+                                      _ ->
+                                        false
+                                    end end}],
+  {reply, with_query(State, Key, all, Handlers), State};
 
 handle_call({ttl, Key}, _From, State) ->
-  Reply = case lookup(State, Key, all) of
-            not_found ->
-              -1;
-            Entry ->
-              Entry#membox_entry.expiry - now_to_secs()
-          end,
-  {reply, Reply, State};
+  Handlers = [{not_found, fun(_) -> -1 end},
+              {found, fun(Entry) -> Entry#membox_entry.expiry - now_to_secs() end}],
+  {reply, with_query(State, Key, all, Handlers), State};
 
 handle_call({rpush, Key, Value}, _From, State) ->
-  Reply = case lookup(State, Key, list) of
-            not_found ->
-              insert(State, Key, #membox_entry{type=list,
-                                               value=[Value]}),
-              ok;
-            error ->
-              error;
-            Entry ->
-              insert(State, Key, Entry#membox_entry{value=[Entry|Entry#membox_entry.value]}),
-              ok
-          end,
-  {reply, Reply, State};
+  Handlers = [{not_found, fun(_) -> insert(State, Key, #membox_entry{type=list, value=[Value]}),
+                                    ok end},
+              {found, fun(Entry) -> insert(State, Key, Entry#membox_entry{value=Entry#membox_entry.value ++ [Value]}),
+                                    ok end}],
+  {reply, with_query(State, Key, list, Handlers), State};
+
+handle_call({lpush, Key, Value}, _From, State) ->
+  Handlers = [{not_found, fun(_) -> insert(State, Key, #membox_entry{type=list, value=[Value]}),
+                                    ok end},
+              {found, fun(Entry) -> insert(State, Key, Entry#membox_entry{value=[Value|Entry#membox_entry.value]}),
+                                    ok end}],
+  {reply, with_query(State, Key, list, Handlers), State};
+
+handle_call({llen, Key}, _From, State) ->
+  Handlers = [{found, fun(Entry) -> length(Entry#membox_entry.value) end}],
+  {reply, with_query(State, Key, list, Handlers), State};
+
+handle_call({lrange, Key, Start, End}, _From, State) ->
+  Handlers = [{found, fun(Entry) -> lists:sublist(Entry#membox_entry.value, Start + 1, End + 1) end}],
+  {reply, with_query(State, Key, list, Handlers), State};
+
+handle_call({ltrim, Key, Start, End}, _From, State) ->
+  Handlers = [{found, fun(Entry) -> NewValue = lists:sublist(Entry#membox_entry.value, Start + 1, End + 1),
+                                    insert(State, Key, Entry#membox_entry{value=NewValue}),
+                                    ok end}],
+  {reply, with_query(State, Key, list, Handlers), State};
+
+handle_call({lindex, Key, Index}, _From, State) ->
+  Handlers = [{found, fun(Entry) -> lists:nth(Index + 1, Entry#membox_entry.value) end}],
+  {reply, with_query(State, Key, list, Handlers), State};
+
+handle_call({lset, Key, Index, Value}, _From, State) ->
+  Handlers = [{found, fun(Entry) -> #membox_entry{value=Values}=Entry,
+                                    case set_member(Values, Index + 1, Value) of
+                                      error ->
+                                        error;
+                                      NewValues ->
+                                        insert(State, Key, Entry#membox_entry{value=NewValues}),
+                                        ok
+                                    end end}],
+  {reply, with_query(State, Key, list, Handlers), State};
+
+handle_call({lrem, Key, Count, Value}, _From, State) ->
+  Handlers = [{found, fun(Entry) -> #membox_entry{value=Values}=Entry,
+                                    NewValues = if
+                                                  Count == 0 ->
+                                                    lists:filter(fun(E) -> E =:= Value end, Values);
+                                                  true ->
+                                                    filter_members(Values, Value, Count)
+                                                end,
+                                    insert(State, Key, Entry#membox_entry{value=NewValues}),
+                                    length(Values) - length(NewValues) end}],
+  {reply, with_query(State, Key, list, Handlers), State};
+
+handle_call({lpop, Key}, _From, State) ->
+  Handlers = [{found, fun(Entry) -> #membox_entry{value=Values}=Entry,
+                                    if
+                                      length(Values) == 0 ->
+                                        nil;
+                                      true ->
+                                        [H|T] = Values,
+                                        insert(State, Key, Entry#membox_entry{value=T}),
+                                        H
+                                    end end}],
+  {reply, with_query(State, Key, list, Handlers), State};
+
+handle_call({rpop, Key}, _From, State) ->
+  Handlers = [{found, fun(Entry) -> #membox_entry{value=Values}=Entry,
+                                    if
+                                      length(Values) == 0 ->
+                                        nil;
+                                      true ->
+                                        [H|T] = lists:reverse(Values),
+                                        insert(State, Key, Entry#membox_entry{value=lists:reverse(T)}),
+                                        H
+                                    end end}],
+  {reply, with_query(State, Key, list, Handlers), State};
 
 handle_call(_Request, _From, State) ->
   {reply, ignore, State}.
@@ -219,6 +257,34 @@ code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
 
 %% Internal functions
+filter_members(Data, FilterVal, Count) ->
+  D = if
+        Count < 0 ->
+          lists:reverse(Data);
+        true ->
+          Data
+      end,
+  filter_members(D, FilterVal, Count, []).
+
+filter_members(Data, _FilterVal, 0, Accum) ->
+  lists:reverse(Accum) ++ Data;
+filter_members([], _FilterVal, Count, Accum) ->
+  Count, lists:reverse(Accum);
+filter_members([FilterVal|T], FilterVal, Count, Accum) ->
+  filter_members(T, FilterVal, Count - 1, Accum);
+filter_members([H|T], FilterVal, Count, Accum) ->
+  filter_members(T, FilterVal, Count, [H|Accum]).
+
+set_member(Data, Position, Item) ->
+  try
+    {Before, A} = lists:split(Position - 1, Data),
+    {_, After} = lists:split(1, A),
+    lists:flatten([Before, Item, After])
+  catch
+    error:badarg ->
+      error
+  end.
+
 find_keys('$end_of_table', Tid, _, Accum) ->
   ets:safe_fixtable(Tid, false),
   Accum;
@@ -319,5 +385,13 @@ insert(#state{data_tid=DTid, keys_tid=KTid}=State, Key, Entry) ->
 now_to_secs() ->
   calendar:datetime_to_gregorian_seconds(calendar:universal_time()).
 
-with_entry(Key, State, Entry, Fun) ->
-  insert(State, Key, Fun(Entry)).
+with_query(State, Key, Type, Funs) ->
+  exec_handler(lookup(State, Key, Type), Funs).
+
+exec_handler(Result, Funs) when Result =:= not_found;
+                                    Result =:= error ->
+  F = proplists:get_value(Result, Funs, ?IDENTITY_FUN),
+  F(Result);
+exec_handler(Result, Funs) ->
+  F = proplists:get_value(found, Funs, ?IDENTITY_FUN),
+  F(Result).

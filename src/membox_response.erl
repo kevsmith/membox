@@ -32,6 +32,8 @@ send(Response, bulk, Sock) when is_binary(Response) ->
   gen_tcp:send(Sock, D);
 send(ok, status_ok, Sock) ->
   gen_tcp:send(Sock, "+OK\r\n");
+send(error, status_ok, Sock) ->
+  gen_tcp:send(Sock, "-Err\r\n");
 send(not_found, bulk_key_string, Sock) ->
   gen_tcp:send(Sock, format_bulk(not_found));
 send(Data, bulk_key_string, Sock) ->
@@ -39,6 +41,8 @@ send(Data, bulk_key_string, Sock) ->
   Resp = io_lib:format("$~p\r\n~s\r\n", [size(KeyString), KeyString]),
   gen_tcp:send(Sock, Resp).
 
+format_bulk(nil) ->
+  "nil\r\n";
 format_bulk(not_found) ->
   "$-1\r\n";
 format_bulk(Item) ->
