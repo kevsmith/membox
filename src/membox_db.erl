@@ -12,7 +12,8 @@
          terminate/2, code_change/3]).
 
 -record(state, {data_tid,
-                keys_tid}).
+                keys_tid,
+                dump_dir="/tmp"}).
 
 start_link(Name) ->
   gen_server:start_link({local, Name}, ?MODULE, [Name], [{fullsweep_after, 1000}]).
@@ -241,6 +242,28 @@ handle_call({rpop, Key}, _From, State) ->
                                     end end}],
   {reply, with_query(State, Key, list, Handlers), State};
 
+%% Persistence control commands
+handle_call({save}, _From, #state{dump_dir=DumpDir, keys_tid=Keys, data_tid=Data}=State) ->
+  ets:tab2file(Keys, filename:join([DumpDir, "keys.rdb"])),
+  ets:tab2file(Data, filename:join([DumpDir, "data.rdb"])),
+  {reply, ok, State};
+
+handle_call({bgsave}, _From, #state{dump_dir=DumpDir, keys_tid=Keys, data_tid=Data}=State) ->
+  proc_lib:spawn(fun() ->
+                     ets:safe_fixtable(Keys, true),
+                     ets:safe_fixtable(Data, true),
+                     try
+                       dump_table(filename:join([DumpDir, "keys.rdb"]), Keys),
+                       dump_table(filename:join([DumpDir, "data.rdb"]), Data)
+                     catch
+                         Type:Exception ->
+                         throw({Type, Exception})
+                     after
+                       ets:safe_fixtable(Data, false),
+                       ets:safe_fixtable(Keys, false)
+                     end end),
+  {reply, ok, State};
+
 handle_call(_Request, _From, State) ->
   {reply, ignore, State}.
 
@@ -257,6 +280,17 @@ code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
 
 %% Internal functions
+dump_table(FileName, Tid) ->
+  {ok, DumpTid} = dets:open_file(FileName, [{type, set}]),
+  dets:delete_all_objects(DumpTid),
+  dump_data(DumpTid, ets:first(Tid), Tid).
+
+dump_data(DumpTid, '$end_of_table', _DataTid) ->
+  dets:close(DumpTid);
+dump_data(DumpTid, Key, DataTid) ->
+  [Value] = ets:lookup(DataTid, Key),
+  dets:insert(DumpTid, Value),
+  dump_data(DumpTid, ets:next(DataTid, Key), DataTid).
 filter_members(Data, FilterVal, Count) ->
   D = if
         Count < 0 ->

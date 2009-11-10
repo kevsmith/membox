@@ -145,9 +145,9 @@ flushdb_expr -> flushdb: {flush, status_ok}.
 flushall_expr -> flushall: {flushall, status_ok}.
 quit_expr -> quit: {quit, close}.
 auth_expr -> auth datum: {[auth, ev('$2')], status_ok}.
-save_expr -> save: {save, status_ok}.
+save_expr -> save: {[save], status_ok}.
 lastsave_expr -> lastsave: {lastsave, integer}.
-bgsave_expr -> bgsave: {bgsave, status_ok}.
+bgsave_expr -> bgsave: {[bgsave], status_ok}.
 shutdown_expr -> shutdown: {shutdown, close}.
 
 %% Server commands

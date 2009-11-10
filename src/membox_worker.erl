@@ -81,12 +81,12 @@ handle_command(quit, _, State) ->
   {stop, shutdown, State};
 
 handle_command(Cmd, ResponseSpec, #state{db=Db, sock=Sock, complete=true}=State) ->
-  Response = gen_server:call(Db, Cmd),
+  Response = gen_server:call(Db, Cmd, 60000),
   membox_response:send(Response, ResponseSpec, Sock),
   {noreply, reset_state(State)};
 
 handle_command(Command, ResponseSpec, #state{sock=Sock, db=Db}=State) when length(Command) == 2 ->
-  Response = gen_server:call(Db, list_to_tuple(Command)),
+  Response = gen_server:call(Db, list_to_tuple(Command), 60000),
   membox_response:send(Response, ResponseSpec, Sock),
   {noreply, reset_state(State)};
 
@@ -94,7 +94,7 @@ handle_command([Cmd|_]=Command, ResponseSpec, #state{sock=Sock, db=Db}=State) wh
                                                                                    Cmd =:= decrby;
                                                                                    Cmd =:= expire;
                                                                                    Cmd =:= keys ->
-  Response = gen_server:call(Db, list_to_tuple(Command)),
+  Response = gen_server:call(Db, list_to_tuple(Command), 60000),
   membox_response:send(Response, ResponseSpec, Sock),
   {noreply, reset_state(State)};
 
@@ -120,12 +120,12 @@ handle_command(Command, ResponseSpec, #state{sock=Sock}=State) when length(Comma
   end;
 
 handle_command({get, _Key}=Command, ResponseSpec, #state{db=Db, sock=Sock}=State) ->
-  Response = gen_server:call(Db, Command),
+  Response = gen_server:call(Db, Command, 60000),
   membox_response:send(Response, ResponseSpec, Sock),
   {noreply, reset_state(State)};
 
 handle_command(Command, ResponseSpec, #state{db=Db, sock=Sock}=State) ->
-  Response = gen_server:call(Db, list_to_tuple(Command)),
+  Response = gen_server:call(Db, list_to_tuple(Command), 60000),
   membox_response:send(Response, ResponseSpec, Sock),
   {noreply, reset_state(State)}.
 

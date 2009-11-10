@@ -109,8 +109,8 @@ db_test() ->
    ?assertMatch({flushall, status_ok}, ?parse("flushall")),
    ?assertMatch({[auth, "testing123"], status_ok}, ?parse("auth testing123")),
    ?assertMatch({quit, close}, ?parse("quit")),
-   ?assertMatch({save, status_ok}, ?parse("save")),
-   ?assertMatch({bgsave, status_ok}, ?parse("bgsave")),
+   ?assertMatch({[save], status_ok}, ?parse("save")),
+   ?assertMatch({[bgsave], status_ok}, ?parse("bgsave")),
    ?assertMatch({lastsave, integer}, ?parse("lastsave")),
    ?assertMatch({shutdown, close}, ?parse("shutdown")),
    ?assertMatch({[select, 1], status_ok}, ?parse("SELECT 1")),
@@ -119,8 +119,8 @@ db_test() ->
    ?assertMatch({flushall, status_ok}, ?parse("FLUSHALL")),
    ?assertMatch({[auth, "testing123"], status_ok}, ?parse("AUTH testing123")),
    ?assertMatch({quit, close}, ?parse("QUIT")),
-   ?assertMatch({save, status_ok}, ?parse("SAVE")),
-   ?assertMatch({bgsave, status_ok}, ?parse("BGSAVE")),
+   ?assertMatch({[save], status_ok}, ?parse("SAVE")),
+   ?assertMatch({[bgsave], status_ok}, ?parse("BGSAVE")),
    ?assertMatch({lastsave, integer}, ?parse("LASTSAVE")),
    ?assertMatch({shutdown, close}, ?parse("SHUTDOWN"))].
 
