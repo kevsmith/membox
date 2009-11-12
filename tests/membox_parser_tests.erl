@@ -111,7 +111,7 @@ db_test() ->
    ?assertMatch({quit, close}, ?parse("quit")),
    ?assertMatch({[save], status_ok}, ?parse("save")),
    ?assertMatch({[bgsave], status_ok}, ?parse("bgsave")),
-   ?assertMatch({lastsave, integer}, ?parse("lastsave")),
+   ?assertMatch({[lastsave], integer}, ?parse("lastsave")),
    ?assertMatch({shutdown, close}, ?parse("shutdown")),
    ?assertMatch({[select, 1], status_ok}, ?parse("SELECT 1")),
    ?assertMatch({[move, "foo", 2], integer}, ?parse("MOVE foo 2")),
@@ -121,7 +121,7 @@ db_test() ->
    ?assertMatch({quit, close}, ?parse("QUIT")),
    ?assertMatch({[save], status_ok}, ?parse("SAVE")),
    ?assertMatch({[bgsave], status_ok}, ?parse("BGSAVE")),
-   ?assertMatch({lastsave, integer}, ?parse("LASTSAVE")),
+   ?assertMatch({[lastsave], integer}, ?parse("LASTSAVE")),
    ?assertMatch({shutdown, close}, ?parse("SHUTDOWN"))].
 
 server_test() ->

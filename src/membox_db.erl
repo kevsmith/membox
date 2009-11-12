@@ -1,6 +1,7 @@
 -module(membox_db).
 
 -include("membox_db.hrl").
+-include_lib("kernel/include/file.hrl").
 
 -behaviour(gen_server).
 
@@ -13,6 +14,7 @@
 
 -record(state, {data_tid,
                 keys_tid,
+                bgsave_worker,
                 dump_dir="/tmp"}).
 
 start_link(Name) ->
@@ -248,27 +250,43 @@ handle_call({save}, _From, #state{dump_dir=DumpDir, keys_tid=Keys, data_tid=Data
   ets:tab2file(Data, filename:join([DumpDir, "data.rdb"])),
   {reply, ok, State};
 
-handle_call({bgsave}, _From, #state{dump_dir=DumpDir, keys_tid=Keys, data_tid=Data}=State) ->
-  proc_lib:spawn(fun() ->
-                     ets:safe_fixtable(Keys, true),
-                     ets:safe_fixtable(Data, true),
-                     try
-                       dump_table(filename:join([DumpDir, "keys.rdb"]), Keys),
-                       dump_table(filename:join([DumpDir, "data.rdb"]), Data)
-                     catch
-                         Type:Exception ->
-                         throw({Type, Exception})
-                     after
-                       ets:safe_fixtable(Data, false),
-                       ets:safe_fixtable(Keys, false)
-                     end end),
+handle_call({bgsave}, _From, #state{bgsave_worker=Worker}=State) when is_pid(Worker) ->
   {reply, ok, State};
+handle_call({bgsave}, _From, #state{dump_dir=DumpDir, keys_tid=Keys, data_tid=Data}=State) ->
+  Pid = proc_lib:spawn(fun() ->
+                           ets:safe_fixtable(Keys, true),
+                           ets:safe_fixtable(Data, true),
+                           try
+                             dump_table(filename:join([DumpDir, "keys.rdb"]), Keys),
+                             dump_table(filename:join([DumpDir, "data.rdb"]), Data)
+                           catch
+                             Type:Exception ->
+                               throw({Type, Exception})
+                           after
+                             ets:safe_fixtable(Data, false),
+                             ets:safe_fixtable(Keys, false)
+                           end end),
+  erlang:monitor(process, Pid),
+  {reply, ok, State#state{bgsave_worker=Pid}};
+handle_call({lastsave}, _From, #state{dump_dir=DumpDir}=State) ->
+  DataFile = filename:join([DumpDir, "data.rdb"]),
+  Reply = case file:read_file_info(DataFile) of
+            {error, _Error} ->
+              0;
+            {ok, Info} ->
+              calendar:datetime_to_gregorian_seconds(Info#file_info.mtime) -
+                calendar:datetime_to_gregorian_seconds({{1970, 1, 1}, {0, 0, 0}})
+          end,
+  {reply, Reply, State};
 
 handle_call(_Request, _From, State) ->
   {reply, ignore, State}.
 
 handle_cast(_Msg, State) ->
   {noreply, State}.
+
+handle_info({'DOWN', _, _, WorkerPid, _}, #state{bgsave_worker=WorkerPid}=State) ->
+  {noreply, State#state{bgsave_worker=undefined}};
 
 handle_info(_Info, State) ->
   {noreply, State}.
@@ -281,6 +299,7 @@ code_change(_OldVsn, State, _Extra) ->
 
 %% Internal functions
 dump_table(FileName, Tid) ->
+  file:delete(FileName),
   {ok, DumpTid} = dets:open_file(FileName, [{type, set}]),
   dets:delete_all_objects(DumpTid),
   dump_data(DumpTid, ets:first(Tid), Tid).
