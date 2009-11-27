@@ -2,6 +2,7 @@ all: compile
 
 compile: ebin special
 	@cd src;erl -make
+	@cp src/membox.app ebin
 
 ebin:
 	@mkdir ebin

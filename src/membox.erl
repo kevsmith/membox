@@ -6,22 +6,25 @@
 -export([start/0, start/2, stop/1]).
 
 start() ->
-  application:start(sasl),
-  application:start(crypto),
   application:start(membox).
 
 start(_StartType, _StartArgs) ->
   case read_config() of
-    {ok, Config} ->
-      membox_sup:start_link(Config);
+    {ok, [{pid_file, Path}|Config]} ->
+      write_pid_file(Path),
+      {ok, Pid} = membox_sup:start_link(Config),
+      {ok, Pid, Path};
     Error ->
       Error
   end.
 
-stop(_State) ->
+stop(Path) ->
+  file:delete(Path),
   ok.
 
 %% Internal functions
+write_pid_file(Path) ->
+  file:write_file(Path, os:getpid()).
 read_config() ->
   case init:get_argument(membox_config) of
     error ->
@@ -31,6 +34,6 @@ read_config() ->
         FileName ->
           file:consult(FileName)
       end;
-    [[FileName]] ->
+    {ok, [[FileName]]} ->
       file:consult(FileName)
   end.

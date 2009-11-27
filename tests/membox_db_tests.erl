@@ -3,7 +3,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 get_set_test_() ->
-  {setup, fun() -> membox_db:start_link(db1) end,
+  {setup, fun() -> membox_db:start_link(db1, []) end,
    fun({ok, Pid}) -> teardown(Pid) end,
    [?_assertMatch(ok, gen_server:call(db1, {set, <<"foo">>, <<"abc">>})),
     ?_assertMatch(<<"abc">>, gen_server:call(db1, {get, <<"foo">>})),
@@ -14,7 +14,7 @@ get_set_test_() ->
     ?_assertMatch(false, gen_server:call(db1, {setnx, <<"foo">>, <<"new_value">>}))]}.
 
 incr_decr_test_() ->
-  {setup, fun() -> membox_db:start_link(db1) end,
+  {setup, fun() -> membox_db:start_link(db1, []) end,
    fun({ok, Pid}) -> teardown(Pid) end,
    [?_assertMatch(1, gen_server:call(db1, {incr, <<"foo">>})),
     ?_assertMatch(-1, gen_server:call(db1, {decr, <<"bar">>})),
@@ -24,7 +24,7 @@ incr_decr_test_() ->
     ?_assertMatch(-4, gen_server:call(db1, {decrby, <<"bar">>, 2}))]}.
 
 exists_test_() ->
-  {setup, fun() -> membox_db:start_link(db1) end,
+  {setup, fun() -> membox_db:start_link(db1, []) end,
    fun({ok, Pid}) -> teardown(Pid) end,
    [?_assertMatch(false, gen_server:call(db1, {exists, <<"foo">>})),
     fun() ->
@@ -32,7 +32,7 @@ exists_test_() ->
         ?assertMatch(true, gen_server:call(db1, {exists, <<"foo">>})) end]}.
 
 type_test_() ->
-  {setup, fun() -> membox_db:start_link(db1) end,
+  {setup, fun() -> membox_db:start_link(db1, []) end,
    fun({ok, Pid}) -> teardown(Pid) end,
    [?_assertMatch(none, gen_server:call(db1, {type, <<"foo">>})),
     fun() ->
@@ -40,7 +40,7 @@ type_test_() ->
         ?assertMatch(string, gen_server:call(db1, {type, <<"foo">>})) end]}.
 
 del_test_() ->
-  {setup, fun() -> membox_db:start_link(db1) end,
+  {setup, fun() -> membox_db:start_link(db1, []) end,
    fun({ok, Pid}) -> teardown(Pid) end,
    [fun() ->
         ok = gen_server:call(db1, {set, <<"foo">>, <<"bar">>}),
@@ -49,7 +49,7 @@ del_test_() ->
         ?assertMatch(not_found, gen_server:call(db1, {keys, <<"foo">>})) end]}.
 
 keys_test_() ->
-  {setup, fun() -> membox_db:start_link(db1) end,
+  {setup, fun() -> membox_db:start_link(db1, []) end,
    fun({ok, Pid}) -> teardown(Pid) end,
    [?_assertMatch(not_found, gen_server:call(db1, {keys, <<"f?o">>})),
     fun() ->
@@ -77,7 +77,7 @@ keys_test_() ->
        true = gen_server:call(db1, {expire, <<"1">>, 60}) end]}.
 
 size_test_() ->
-  {setup, fun() -> membox_db:start_link(db1) end,
+  {setup, fun() -> membox_db:start_link(db1, []) end,
    fun({ok, Pid}) -> teardown(Pid) end,
    [fun() ->
         lists:foreach(fun(I) ->
@@ -87,7 +87,7 @@ size_test_() ->
         1000 = gen_server:call(db1, dbsize) end]}.
 
 ttl_test_() ->
-  {setup, fun() -> membox_db:start_link(db1) end,
+  {setup, fun() -> membox_db:start_link(db1, []) end,
    fun({ok, Pid}) -> teardown(Pid) end,
    [fun() ->
         ok = gen_server:call(db1, {set, <<"ab">>, <<"def">>}),
@@ -95,7 +95,7 @@ ttl_test_() ->
         30 = gen_server:call(db1, {ttl, <<"ab">>}) end]}.
 
 list_test_() ->
-  {setup, fun() -> membox_db:start_link(db1) end,
+  {setup, fun() -> membox_db:start_link(db1, []) end,
    fun({ok, Pid}) -> teardown(Pid) end,
    [?_assertMatch(ok, gen_server:call(db1, {lpush, <<"foo">>, <<"abc">>})),
     ?_assertMatch(ok, gen_server:call(db1, {rpush, <<"foo">>, <<"def">>})),
@@ -113,18 +113,57 @@ list_test_() ->
         ok = gen_server:call(db1, {lpush, <<"bar">>, <<"1">>}),
         ok = gen_server:call(db1, {lpush, <<"bar">>, <<"2">>}),
         2 = gen_server:call(db1, {lrem, <<"bar">>, 2, <<"1">>}) end,
-   fun() ->
+    fun() ->
        ok = gen_server:call(db1, {lpush, <<"quux">>, <<"c">>}),
        ok = gen_server:call(db1, {lpush, <<"quux">>, <<"b">>}),
        ok = gen_server:call(db1, {lpush, <<"quux">>, <<"a">>}),
        <<"a">> = gen_server:call(db1, {lpop, <<"quux">>}),
        <<"c">> = gen_server:call(db1, {rpop, <<"quux">>}),
-       [<<"b">>] = gen_server:call(db1, {lrange, <<"quux">>, 0, 0}) end]}.
+       [<<"b">>] = gen_server:call(db1, {lrange, <<"quux">>, 0, 0}) end,
+    fun() ->
+        ok = gen_server:call(db1, {flush}),
+        setup_list(db1, <<"quux">>),
+        ok = gen_server:call(db1, {ltrim, <<"quux">>, 1, 2}),
+        [<<"b">>, <<"c">>] = gen_server:call(db1, {lrange, <<"quux">>, 0, 1}) end,
+    fun() ->
+        ok = gen_server:call(db1, {flush}),
+        ok = gen_server:call(db1, {lpush, <<"foo">>, <<"a">>}),
+        ok = gen_server:call(db1, {lpush, <<"foo">>, <<"a">>}),
+        ok = gen_server:call(db1, {lpush, <<"foo">>, <<"b">>}),
+        ?assertEqual(2, gen_server:call(db1, {lrem, <<"foo">>, 2, <<"a">>})) end,
+    fun() ->
+        ok = gen_server:call(db1, {flush}),
+        setup_list2(db1, <<"foo">>),
+        ?assertEqual(2, gen_server:call(db1, {lrem, <<"foo">>, -2, <<"a">>})),
+        ?assertMatch([<<"a">>, <<"a">>, <<"b">>, <<"b">>], gen_server:call(db1, {lrange, <<"foo">>, 0, 3})) end,
+    fun() ->
+        ok = gen_server:call(db1, {flush}),
+        setup_list(db1, <<"foo">>),
+        ?assertMatch(ok, gen_server:call(db1, {lset, <<"foo">>, 1, <<"e">>})),
+        ?assertMatch([<<"a">>, <<"e">>, <<"c">>, <<"d">>], gen_server:call(db1, {lrange, <<"foo">>, 0, 3})) end,
+    fun() ->
+        ok = gen_server:call(db1, {flush}),
+        setup_list(db1, <<"foo">>),
+        ?assertMatch(error, gen_server:call(db1, {lset, <<"foo">>, 5, <<"e">>})) end]}.
 
 teardown(Pid) ->
   unlink(Pid),
   exit(Pid, shutdown),
   timer:sleep(100).
+
+setup_list(Database, Key) ->
+  ok = gen_server:call(Database, {lpush, Key, <<"d">>}),
+  ok = gen_server:call(Database, {lpush, Key, <<"c">>}),
+  ok = gen_server:call(Database, {lpush, Key, <<"b">>}),
+  ok = gen_server:call(Database, {lpush, Key, <<"a">>}).
+
+setup_list2(Database, Key) ->
+  ok = gen_server:call(Database, {rpush, Key, <<"a">>}),
+  ok = gen_server:call(Database, {rpush, Key, <<"a">>}),
+  ok = gen_server:call(Database, {rpush, Key, <<"b">>}),
+  ok = gen_server:call(Database, {rpush, Key, <<"a">>}),
+  ok = gen_server:call(Database, {rpush, Key, <<"a">>}),
+  ok = gen_server:call(Database, {rpush, Key, <<"b">>}).
 
 members([], _Data) ->
   true;

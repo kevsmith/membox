@@ -1,12 +1,14 @@
 -module(membox_db).
 
 -include("membox_db.hrl").
+
+-include_lib("eunit/include/eunit.hrl").
 -include_lib("kernel/include/file.hrl").
 
 -behaviour(gen_server).
 
 %% API
--export([start_link/1]).
+-export([start_link/2, bgsave/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -15,17 +17,23 @@
 -record(state, {data_tid,
                 keys_tid,
                 bgsave_worker,
-                dump_dir="/tmp"}).
+                dump_dir,
+                save_ref}).
 
-start_link(Name) ->
-  gen_server:start_link({local, Name}, ?MODULE, [Name], [{fullsweep_after, 1000}]).
+start_link(Name, Config) ->
+  gen_server:start_link({local, Name}, ?MODULE, [Name, Config], [{fullsweep_after, 1000}]).
 
-init([TableName]) ->
+bgsave(Target) ->
+  gen_server:call(Target, {bgsave}).
+
+init([TableName, Config]) ->
   DataTid = ets:new(TableName, [set]),
   KeysTid = ets:new(list_to_atom(atom_to_list(TableName) ++ "_keys"), [set]),
   ets:insert(KeysTid, {<<"keys">>, 0}),
   {ok, #state{data_tid=DataTid,
-              keys_tid=KeysTid}}.
+              keys_tid=KeysTid,
+              dump_dir=proplists:get_value(save_dir, Config, "/tmp"),
+              save_ref=start_save_timer(list_to_integer(proplists:get_value(save_interval, Config, "0")))}}.
 
 handle_call({set, Key, Value}, _From, State) ->
   insert(State, Key, #membox_entry{type=string,
@@ -274,10 +282,15 @@ handle_call({lastsave}, _From, #state{dump_dir=DumpDir}=State) ->
             {error, _Error} ->
               0;
             {ok, Info} ->
-              calendar:datetime_to_gregorian_seconds(Info#file_info.mtime) -
-                calendar:datetime_to_gregorian_seconds({{1970, 1, 1}, {0, 0, 0}})
+              membox_util:datetime_to_unix_ts(Info#file_info.mtime)
           end,
   {reply, Reply, State};
+
+handle_call({flush}, _From, #state{keys_tid=Keys, data_tid=Data}=State) ->
+  ets:delete_all_objects(Keys),
+  ets:insert(Keys, {<<"keys">>, 0}),
+  ets:delete_all_objects(Data),
+  {reply, ok, State};
 
 handle_call(_Request, _From, State) ->
   {reply, ignore, State}.
@@ -291,8 +304,13 @@ handle_info({'DOWN', _, _, WorkerPid, _}, #state{bgsave_worker=WorkerPid}=State)
 handle_info(_Info, State) ->
   {noreply, State}.
 
-terminate(_Reason, _State) ->
-  ok.
+terminate(_Reason, #state{save_ref=SaveTimer}) ->
+  case SaveTimer of
+    undefined ->
+      ok;
+    _ ->
+      timer:cancel(SaveTimer)
+  end.
 
 code_change(_OldVsn, State, _Extra) ->
   {ok, State}.
@@ -310,14 +328,14 @@ dump_data(DumpTid, Key, DataTid) ->
   [Value] = ets:lookup(DataTid, Key),
   dets:insert(DumpTid, Value),
   dump_data(DumpTid, ets:next(DataTid, Key), DataTid).
+
 filter_members(Data, FilterVal, Count) ->
-  D = if
-        Count < 0 ->
-          lists:reverse(Data);
-        true ->
-          Data
-      end,
-  filter_members(D, FilterVal, Count, []).
+  if
+    Count < 0 ->
+      lists:reverse(filter_members(lists:reverse(Data), FilterVal, Count * -1, []));
+    true ->
+      filter_members(Data, FilterVal, Count, [])
+  end.
 
 filter_members(Data, _FilterVal, 0, Accum) ->
   lists:reverse(Accum) ++ Data;
@@ -448,3 +466,9 @@ exec_handler(Result, Funs) when Result =:= not_found;
 exec_handler(Result, Funs) ->
   F = proplists:get_value(found, Funs, ?IDENTITY_FUN),
   F(Result).
+
+start_save_timer(0) ->
+  undefined;
+start_save_timer(N) ->
+  {ok, Ref} = timer:apply_interval(N, ?MODULE, bgsave, [self()]),
+  Ref.
