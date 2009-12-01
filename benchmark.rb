@@ -1,7 +1,7 @@
 require 'rubygems'
 require 'redis'
 
-redis = Redis.new({:host => '192.168.1.106'})
+redis = Redis.new({:host => '192.168.1.101'})
 requests_processed = 100000
 
 value = 1

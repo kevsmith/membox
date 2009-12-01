@@ -10,6 +10,7 @@
 -export([new_connection/2]).
 
 start_link() ->
+  io:format("Listener is: ~p~n", [self()]),
 	gen_nb_server:start_link(?MODULE, "0.0.0.0", 6379, []).
 
 init([]) ->

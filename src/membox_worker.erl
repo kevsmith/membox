@@ -55,7 +55,6 @@ handle_info({tcp, Socket, Data}, State) ->
     {ok, {Command, ResponseSpec}} ->
       handle_command(Command, ResponseSpec, State);
     _Error ->
-      io:format("Error: ~p~n", [_Error]),
       inet:setopts(Socket, [{active, once}]),
       {noreply, State}
   end;
@@ -67,7 +66,6 @@ handle_info({inet_async, _Sock, _, {ok, Data}}, #state{command=Command, resp_spe
   handle_command(FinalCommand, RespSpec, State#state{complete=true});
 
 handle_info(_Info, State) ->
-  io:format("Info: ~p~n", [_Info]),
   {noreply, State}.
 
 terminate(_Reason, _State) ->

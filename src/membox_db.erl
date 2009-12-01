@@ -33,7 +33,7 @@ init([TableName, Config]) ->
   {ok, #state{data_tid=DataTid,
               keys_tid=KeysTid,
               dump_dir=proplists:get_value(save_dir, Config, "/tmp"),
-              save_ref=start_save_timer(list_to_integer(proplists:get_value(save_interval, Config, "0")))}}.
+              save_ref=start_save_timer(proplists:get_value(save_interval, Config, 0))}}.
 
 handle_call({set, Key, Value}, _From, State) ->
   insert(State, Key, #membox_entry{type=string,
